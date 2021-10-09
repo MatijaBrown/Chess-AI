@@ -1,5 +1,5 @@
-from tkinter.constants import NONE
-from pieces import SIDE_WHITE, SIDE_BLACK, Bishop, King, Knight, Pawn, Queen, Rook
+from os import remove
+from pieces import *
 import math
 
 BOARD_SIZE = 8
@@ -12,9 +12,11 @@ STARTING_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 
 NONE_SELECTED = (-1, -1)
 
+
 def coords_to_flag(x: int, y: int) -> int:
     offset = y * BOARD_SIZE + x
     return 1 << offset
+
 
 def flag_to_coords(flag: int): # Only single flags
     for i in range(int.bit_length()):
@@ -24,15 +26,22 @@ def flag_to_coords(flag: int): # Only single flags
             return x, y
     return -1, -1
 
+
 class Board():
     
     def __init__(self, chess):
         self.chess = chess
         self.canvas = self.chess.canvas
 
-        self.pieces = [None for _ in range(BOARD_SIZE * BOARD_SIZE)]
-
         self.selected = NONE_SELECTED
+
+        self.pieces = {
+            WHITE_PAWN: 0, WHITE_ROOK: 0, WHITE_KNIGHT: 0, WHITE_BISHOP: 0, WHITE_QUEEN: 0, WHITE_KING: 0,
+            BLACK_PAWN: 0, BLACK_ROOK: 0, BLACK_KNIGHT: 0, BLACK_BISHOP: 0, BLACK_QUEEN: 0, BLACK_KING: 0
+        }
+        self.white_squares = 0
+        self.black_squares = 0
+        self.taken_squares = 0
 
     def __load_fen(self, string):
         x = 0
@@ -41,21 +50,21 @@ class Board():
         while string[index] != ' ':
             c = string[index]
             position = y * BOARD_SIZE + x
-            side = SIDE_WHITE
-            if c.islower():
-                side = SIDE_BLACK
+            piece = PREFIX_BLACK
+            if c.isupper():
+                piece = PREFIX_WHITE
             if c.lower() == 'r':
-                    self.pieces[position] = Rook(side, self)
+                piece += NAME_ROOK
             elif c.lower() == 'n':
-                    self.pieces[position] = Knight(side, self)
+                piece += NAME_KNIGHT
             elif c.lower() == 'b':
-                    self.pieces[position] = Bishop(side, self)
+                piece += NAME_BISHOP
             elif c.lower() == 'q':
-                    self.pieces[position] = Queen(side, self)
+                piece += NAME_QUEEN
             elif c.lower() == 'k':
-                    self.pieces[position] = King(side, self)
+                piece += NAME_KING
             elif c.lower() == 'p':
-                    self.pieces[position] = Pawn(side, self)
+                piece += NAME_PAWN
             elif c == '/':
                 y += 1
                 x = -1
@@ -63,6 +72,8 @@ class Board():
                 x += int(c) - 1
             x += 1
             index += 1
+            if piece in self.pieces.keys():
+                self.pieces[piece] |= 1 << position
 
         index += 1
         if string[index] == 'w':
@@ -82,26 +93,67 @@ class Board():
 
         # TODO: En passent and time
 
+    def __recalculate_piece_flags(self):
+        self.white_squares = 0
+        self.black_squares = 0
+        for key in self.pieces.keys():
+            if key.startswith(PREFIX_WHITE):
+                self.white_squares |= self.pieces[key]
+            else:
+                self.black_squares |= self.pieces[key]
+        self.taken_squares = self.white_squares | self.black_squares
+
+    def __get_piece(self, x, y):
+        position = y * BOARD_SIZE + x
+        if (self.taken_squares & (1 << position)) == 0:
+            return EMPTY
+        for key in self.pieces.keys():
+            if (self.pieces[key] & (1 << position)) != 0:
+                return key
+        return EMPTY
+
     def reset(self):
         self.selected = NONE_SELECTED
         self.__load_fen(STARTING_FEN)
+        self.__recalculate_piece_flags()
 
-    def select_piece(self, x, y):
-        if (self.pieces[y * BOARD_SIZE + x] is None):
-            return None
-        self.selected = (x, y)
-        return self.pieces[y * BOARD_SIZE + x]
+    def select_piece(self, x, y, current_turn):
+        side_squares = self.white_squares if current_turn is SIDE_WHITE else self.black_squares
+        position = y * BOARD_SIZE + x
+        if (side_squares & (1 << position)) == 0:
+            return EMPTY
+        piece = self.__get_piece(x, y)
+        if piece is not EMPTY:
+            self.selected = (x, y)
+        return piece
+
+    def __remove_piece(self, x, y):
+        position = y * BOARD_SIZE + x
+        piece = self.__get_piece(x, y)
+        if piece is EMPTY:
+            return
+        self.pieces[piece] &= ~(1 << position)
+        self.__recalculate_piece_flags()
+
+    def __set_piece(self, x, y, piece):
+        if piece is EMPTY:
+            return
+        position = y * BOARD_SIZE + x
+        self.__remove_piece(x, y)
+        self.pieces[piece] |= 1 << position
+        self.__recalculate_piece_flags()
 
     def move_selected_piece(self, newX, newY):
         if self.selected == NONE_SELECTED:
             return
-        oX = self.selected[0]
-        oY = self.selected[1]
-        self.pieces[newY * BOARD_SIZE + newX] = self.pieces[oY * BOARD_SIZE + oX]
-        self.pieces[oY * BOARD_SIZE + oX] = None
+        piece = self.__get_piece(self.selected[0], self.selected[1])
+        self.__remove_piece(self.selected[0], self.selected[1])
         self.selected = NONE_SELECTED
+        removed_piece = self.__get_piece(newX, newY)
+        self.__set_piece(newX, newY, piece)
+        return removed_piece
 
-    def draw(self):
+    def draw_squares(self):
         self.canvas.delete("square")
         colour = WHITE_COLOUR
         square_size = self.chess.square_size
@@ -119,9 +171,8 @@ class Board():
                 colour = WHITE_COLOUR if colour == BLACK_COLOUR else BLACK_COLOUR
 
     def draw_pieces(self):
-        self.canvas.delete("piece")
+        self.canvas.delete(TAG_PIECE)
         for y in range(BOARD_SIZE):
             for x in range(BOARD_SIZE):
-                index = y * BOARD_SIZE + x
-                if self.pieces[index] is not None:
-                    self.pieces[index].draw(x, y)
+                piece = self.__get_piece(x, y)
+                draw_piece(piece, x, y, self.chess.square_size, self.canvas)

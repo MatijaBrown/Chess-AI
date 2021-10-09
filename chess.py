@@ -1,6 +1,4 @@
 from board import *
-
-from pieces import SIDE_WHITE, SIDE_BLACK
 INVALID = 0
 
 from player import *
@@ -37,14 +35,14 @@ class Chess(tk.Frame):
         self.save_button = tk.Button(self.statusbar, text="Save", fg="black")
         self.save_button.pack(side=tk.LEFT, in_=self.statusbar)
 
-        self.status_label = tk.Label(self.statusbar, text="    White's turn    ", fg="black")
+        self.status_label = tk.Label(self.statusbar, text="    Waiting to start game...    ", fg="black")
         self.status_label.pack(side=tk.LEFT, in_=self.statusbar)
-
-        self.turn_status = SIDE_WHITE
 
         self.quit_button = tk.Button(self.statusbar, text="Quit", fg="black", command=self.top.destroy)
         self.quit_button.pack(side=tk.RIGHT, in_=self.statusbar)
         self.statusbar.pack(expand=False, fill=tk.X, side=tk.BOTTOM)
+
+        load_textures()
 
     def __current_player(self):
         if self.current_turn == SIDE_WHITE:
@@ -53,12 +51,18 @@ class Chess(tk.Frame):
             return self.player_black
 
     def click(self, event):
+        if self.current_turn == INVALID:
+            return
+
         x = int(event.x / self.square_size)
         y = int(event.y / self.square_size)
 
-        selected_piece = self.board.select_piece(x, y)
-        if selected_piece is None:
-            self.board.move_selected_piece(x, y)
+        selected_piece = self.board.select_piece(x, y, self.current_turn)
+        if selected_piece is EMPTY:
+            removed = self.board.move_selected_piece(x, y)
+            print("Removed:", removed)
+
+            self.current_turn = SIDE_WHITE if self.current_turn == SIDE_BLACK else SIDE_BLACK
 
         self.refresh(None)
 
@@ -68,10 +72,8 @@ class Chess(tk.Frame):
             sizeY = int((event.height - 1) / BOARD_SIZE)
             self.square_size = min(sizeX, sizeY)
 
-        self.board.draw()
+        self.board.draw_squares()
         self.board.draw_pieces()
-        self.canvas.tag_raise("piece")
-        self.canvas.tag_lower("square")
 
     def draw(self):
         pass

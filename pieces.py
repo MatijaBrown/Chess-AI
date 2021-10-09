@@ -1,4 +1,3 @@
-import board
 from PIL import ImageTk
 
 SIDE_WHITE = 1
@@ -28,59 +27,47 @@ BLACK_BISHOP = PREFIX_BLACK + NAME_BISHOP
 BLACK_QUEEN = PREFIX_BLACK + NAME_QUEEN
 BLACK_KING = PREFIX_BLACK + NAME_KING
 
+EMPTY = "EMPTY"
 
-class Piece():
+Pieces = {
+    WHITE_PAWN: None, WHITE_ROOK: None, WHITE_KNIGHT: None, WHITE_BISHOP: None, WHITE_QUEEN: None, WHITE_KING: None,
+    BLACK_PAWN: None, BLACK_ROOK: None, BLACK_KNIGHT: None, BLACK_BISHOP: None, BLACK_QUEEN: None, BLACK_KING: None,
+}
+
+TAG_PIECE = "piece"
+
+def __texture(name):
+    file = "./res/" + name + ".png"
+    return ImageTk.PhotoImage(file=file, width=60, height=60)
+
+
+def load_textures():
+    Pieces[WHITE_PAWN] = __texture(WHITE_PAWN)
+    Pieces[WHITE_ROOK] = __texture(WHITE_ROOK)
+    Pieces[WHITE_KNIGHT] = __texture(WHITE_KNIGHT)
+    Pieces[WHITE_BISHOP] = __texture(WHITE_BISHOP)
+    Pieces[WHITE_QUEEN] = __texture(WHITE_QUEEN)
+    Pieces[WHITE_KING] = __texture(WHITE_KING)
     
-    def __init__(self, side, name, board):
-        self.side = side
-        self.board = board
-        self.canvas = self.board.canvas
-
-        self.texture = ImageTk.PhotoImage(file="./res/" + name + ".png", width=60, height=60)
-
-    def __to_window_choords(self, boardX, boardY):
-        winX = boardX * self.board.chess.square_size
-        winY = boardY * self.board.chess.square_size
-        return winX, winY
-
-    def draw(self, boardX, boardY):
-        x, y = self.__to_window_choords(boardX, boardY)
-        x0 = x + int(self.board.chess.square_size / 2)
-        y0 = y + int(self.board.chess.square_size / 2)
-        self.canvas.create_image(x0, y0, image=self.texture, tags="piece", anchor='c')
+    Pieces[BLACK_PAWN] = __texture(BLACK_PAWN)
+    Pieces[BLACK_ROOK] = __texture(BLACK_ROOK)
+    Pieces[BLACK_KNIGHT] = __texture(BLACK_KNIGHT)
+    Pieces[BLACK_BISHOP] = __texture(BLACK_BISHOP)
+    Pieces[BLACK_QUEEN] = __texture(BLACK_QUEEN)
+    Pieces[BLACK_KING] = __texture(BLACK_KING)
 
 
-class Pawn(Piece):
-    
-    def __init__(self, side, board):
-        super().__init__(side, ("white" if (side == SIDE_WHITE) else "black") + "_pawn", board)
+def __to_window_choords(boardX, boardY, square_size):
+    winX = boardX * square_size
+    winY = boardY * square_size
+    return winX, winY
 
 
-class Rook(Piece):
-    
-    def __init__(self, side, board):
-        super().__init__(side, ("white" if (side == SIDE_WHITE) else "black") + "_rook", board)
-
-
-class Knight(Piece):
-    
-    def __init__(self, side, board):
-        super().__init__(side, ("white" if (side == SIDE_WHITE) else "black") + "_knight", board)
-
-
-class Bishop(Piece):
-    
-    def __init__(self, side, board):
-        super().__init__(side, ("white" if (side == SIDE_WHITE) else "black") + "_bishop", board)
-
-
-class Queen(Piece):
-    
-    def __init__(self, side, board):
-        super().__init__(side, ("white" if (side == SIDE_WHITE) else "black") + "_queen", board)
-
-
-class King(Piece):
-    
-    def __init__(self, side, board):
-        super().__init__(side, ("white" if (side == SIDE_WHITE) else "black") + "_king", board)
+def draw_piece(piece, boardX, boardY, square_size, canvas):
+    if piece is EMPTY:
+        return
+    texture = Pieces[piece]
+    x, y = __to_window_choords(boardX, boardY, square_size)
+    x0 = x + int(square_size / 2)
+    y0 = y + int(square_size / 2)
+    canvas.create_image(x0, y0, image=texture, tags=(piece, TAG_PIECE), anchor='c')
