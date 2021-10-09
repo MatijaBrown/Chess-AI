@@ -1,6 +1,4 @@
 from board import *
-INVALID = 0
-
 from player import *
 
 import tkinter as tk
@@ -14,9 +12,9 @@ class Chess(tk.Frame):
         self.square_size = INITIAL_SQUARE_SIZE
         self.canvas_size = self.square_size * BOARD_SIZE
 
-        self.current_turn = INVALID
         self.player_white = HumanPlayer(self, SIDE_WHITE)
         self.player_black = HumanPlayer(self, SIDE_BLACK)
+        self.current_side = SIDE_NONE
 
         tk.Frame.__init__(self, self.top)
 
@@ -44,25 +42,21 @@ class Chess(tk.Frame):
 
         load_textures()
 
-    def __current_player(self):
-        if self.current_turn == SIDE_WHITE:
-            return self.player_white
-        else:
-            return self.player_black
+    def set_side(self, side):
+        self.current_side = side
+        self.status_label["text"] = "   White's Turn    " if side == SIDE_WHITE else "    Black's Turn    "
 
     def click(self, event):
-        if self.current_turn == INVALID:
+        if self.current_side == SIDE_NONE:
             return
 
         x = int(event.x / self.square_size)
         y = int(event.y / self.square_size)
 
-        selected_piece = self.board.select_piece(x, y, self.current_turn)
-        if selected_piece is EMPTY:
-            removed = self.board.move_selected_piece(x, y)
-            print("Removed:", removed)
-
-            self.current_turn = SIDE_WHITE if self.current_turn == SIDE_BLACK else SIDE_BLACK
+        result = self.board.select_square_if_piece_is_on_side(x, y, self.current_side)
+        if not result and self.board.has_selected():
+            self.board.move_selected_piece(x, y)
+            self.set_side(-self.current_side)
 
         self.refresh(None)
 
@@ -74,9 +68,6 @@ class Chess(tk.Frame):
 
         self.board.draw_squares()
         self.board.draw_pieces()
-
-    def draw(self):
-        pass
 
     def reset(self):
         self.board.reset()

@@ -8,7 +8,6 @@ def run():
 
     chess = Chess(top)
     chess.pack(side=tk.TOP, fill=tk.BOTH, expand=tk.TRUE, padx=4, pady=4)
-    chess.draw()
 
     top.mainloop()
 

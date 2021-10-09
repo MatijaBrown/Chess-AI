@@ -77,9 +77,9 @@ class Board():
 
         index += 1
         if string[index] == 'w':
-            self.chess.current_turn = SIDE_WHITE
+            self.chess.set_side(SIDE_WHITE)
         elif string[index] == 'b':
-            self.chess.current_turn = SIDE_BLACK
+            self.chess.set_side(SIDE_BLACK)
 
         castling = string[index:(index + 4)]
         if 'K' in castling:
@@ -117,15 +117,23 @@ class Board():
         self.__load_fen(STARTING_FEN)
         self.__recalculate_piece_flags()
 
-    def select_piece(self, x, y, current_turn):
-        side_squares = self.white_squares if current_turn is SIDE_WHITE else self.black_squares
-        position = y * BOARD_SIZE + x
-        if (side_squares & (1 << position)) == 0:
-            return EMPTY
-        piece = self.__get_piece(x, y)
-        if piece is not EMPTY:
+    def select_square(self, x, y):
+        if self.selected == (x, y):
+            self.selected = NONE_SELECTED
+        else:
             self.selected = (x, y)
-        return piece
+
+    def select_square_if_piece_is_on_side(self, x, y, side):
+        side_squares = self.white_squares if side == SIDE_WHITE else self.black_squares
+        position = y * BOARD_SIZE + x
+        if (side_squares & (1 << position)) != 0:
+            self.select_square(x, y)
+            return True
+        else:
+            return False
+
+    def has_selected(self):
+        return self.selected != NONE_SELECTED
 
     def __remove_piece(self, x, y):
         position = y * BOARD_SIZE + x
@@ -164,7 +172,7 @@ class Board():
                 y1 = (7 - row) * square_size
                 x2 = x1 + square_size
                 y2 = y1 + square_size
-                if (col == self.selected[0]) and (row == (7 - self.selected[1])):
+                if (col, 7 - row) == self.selected:
                     self.canvas.create_rectangle(x1, y1, x2, y2, outline="black", fill=SELECTED_COLOUR, tags="square")
                 else:
                     self.canvas.create_rectangle(x1, y1, x2, y2, outline="black", fill=colour, tags="square")

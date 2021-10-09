@@ -1,6 +1,7 @@
 from PIL import ImageTk
 
 SIDE_WHITE = 1
+SIDE_NONE = 0
 SIDE_BLACK = -1
 
 NAME_PAWN = "pawn"

@@ -1,5 +1,3 @@
-from pieces import SIDE_WHITE, SIDE_BLACK
-
 class Player():
 
     can_castle_kingside = False
