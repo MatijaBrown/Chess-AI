@@ -1,5 +1,6 @@
 from board import *
 from player import *
+from common import *
 
 import tkinter as tk
 
@@ -42,9 +43,18 @@ class Chess(tk.Frame):
 
         load_textures()
 
+    def __current_player(self):
+        return self.player_white if self.current_side == SIDE_WHITE else self.player_black
+
     def set_side(self, side):
+        if self.current_side is not SIDE_NONE:
+            self.__current_player().post_turn()
         self.current_side = side
+        if self.current_side is SIDE_NONE:
+            self.status_label["text"] = "   NONE_SIDE   "
+            return
         self.status_label["text"] = "   White's Turn    " if side == SIDE_WHITE else "    Black's Turn    "
+        self.__current_player().on_turn_started()
 
     def click(self, event):
         if self.current_side == SIDE_NONE:
@@ -53,10 +63,7 @@ class Chess(tk.Frame):
         x = int(event.x / self.square_size)
         y = int(event.y / self.square_size)
 
-        result = self.board.select_square_if_piece_is_on_side(x, y, self.current_side)
-        if not result and self.board.has_selected():
-            self.board.move_selected_piece(x, y)
-            self.set_side(-self.current_side)
+        self.__current_player().on_click(x, y)
 
         self.refresh(None)
 
