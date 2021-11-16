@@ -23,7 +23,7 @@ class Chess(tk.Frame):
 
         self.board = board.Board(self)
 
-        self.player_white = players.HumanPlayer(self, SIDE_WHITE)
+        self.player_white = players.AiPlayer(self, SIDE_WHITE)
         self.board.player_white = self.player_white
         self.player_black = players.HumanPlayer(self, SIDE_BLACK)
         self.board.player_black = self.player_black
@@ -54,6 +54,7 @@ class Chess(tk.Frame):
         return self.get_player(self.current_side)
 
     def set_side(self, side):
+        self.__refresh()
         if self.get_current_player():
             self.get_current_player().post_turn()
         self.current_side = side

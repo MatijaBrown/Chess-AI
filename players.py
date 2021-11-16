@@ -1,8 +1,10 @@
 from common import *
 
 import pieces as pss
+import ai
 
 import copy
+import time
 
 
 class Player():
@@ -58,7 +60,6 @@ class HumanPlayer(Player):
     
     def __init__(self, chess, side):
         super().__init__(chess, chess.board, side)
-        self.loss = False
 
     def __cant_move(self):
         cant_move = True
@@ -107,13 +108,33 @@ class HumanPlayer(Player):
 
 class AiPlayer(Player):
     
+    possible_moves = []
+
     def __init__(self, chess, side):
         super().__init__(chess, chess.board, side)
 
-    def pre_turn(self):
-        pass
+    def __cant_move(self, squares):
+        cant_move = True
+        for square in squares.keys():
+            if squares[square] != 0:
+                cant_move = False
+                break
+        return cant_move
 
-    def on_click(gridX, gridY) -> bool:
+    def pre_turn(self):
+        time.sleep(2)
+        enemy = self.chess.get_player(-self.chess.current_side)
+        accessible_squares = pss.calculate_pieces(self, enemy)
+        self.possible_moves = ai.create_all_moves(accessible_squares)
+
+        move = ai.pick_move(self.possible_moves)
+        if move.fromX > -1:
+            self.chess_board.move_piece(move.fromX, move.fromY, move.toX, move.toY)
+            
+        self.chess.set_side(-self.side)
+
+
+    def on_click(self, gridX, gridY):
         return True
 
     def post_turn(self):

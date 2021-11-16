@@ -1,3 +1,5 @@
+import math as maths
+
 import string
 
 
@@ -54,3 +56,10 @@ def square_name_to_tuple(square_name):
 
 def is_on_board(boardX, boardY):
     return (boardX >= 0) and (boardY >= 0) and (boardX < BOARD_SIZE) and (boardY < BOARD_SIZE)
+
+
+def mask_to_coords(mask):
+    n = int(maths.log2(mask))
+    x = n % BOARD_SIZE
+    y = int((n - x) / BOARD_SIZE)
+    return x, y

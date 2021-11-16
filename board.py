@@ -110,7 +110,7 @@ class Board():
     def reset(self):
         for key in self.pieces.keys():
             self.pieces[key] = 0
-        self.load_fen("8/p2k4/P4K2/3P2r1/8/8/3b1r2/8 w KQkq - 0 1")
+        self.load_fen(STARTING_FEN)
         self.__recalculate_flags()
 
     def is_piece_at(self, boardX, boardY):
