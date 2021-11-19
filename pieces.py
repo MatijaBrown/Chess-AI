@@ -52,13 +52,6 @@ def __check_board(position, board):
     return (board & (1 << position)) == 0
 
 
-def __clearance_mask(friend_board, enemy_board, checkCheck):
-    mask = (~friend_board) | enemy_board
-    if not(checkCheck):
-        mask |= friend_board
-    return mask
-
-
 def __create_dummy_player(player, oldX, oldY, newX, newY):
     board = copy.copy(player.chess_board)
     board.pieces = player.chess_board.pieces.copy()
@@ -80,51 +73,37 @@ def __check_check(player, enemy, fromX, fromY, toX, toY):
 
 
 def calculate_pawn(x, y, player, enemy, checkCheck, targets_list):
-    accessable_squares = 0
+    accessible_squares = 0
 
-    fw = player.forward()
-    friend_board = player.board()
-    enemy_board = enemy.board()
-    
-    position = offset_of(x, y + fw)
-    if __check_board(position, enemy_board) and __check_board(position, friend_board):
-        flag = flag_piece(x, y + fw)
-        if checkCheck and __check_check(player, enemy, x, y, x, y + fw):
-            flag = 0
-        elif checkCheck:
-            targets_list.append((x, y + fw))
-        accessable_squares |= flag
+    if not has_square(player.board() | enemy.board(), x, y + player.forward()) and checkCheck: # Need to test forward only if really moving
+        if not __check_check(player, enemy, x, y, x, y + player.forward()):
+            accessible_squares |= flag_piece(x, y + player.forward())
+            targets_list.append((x, y + player.forward()))
+        
+        behind = y - player.forward()
+        if is_on_board(x, behind) and ((behind == 0) or (behind == 7)):
+            if not __check_check(player, enemy, x, y, x, y + 2 * player.forward()):
+                accessible_squares |= flag_piece(x, y + 2 * player.forward())
+                targets_list.append((x, y + 2 * player.forward()))
+                
+    toX = x + 1
+    toY = y + player.forward()
+    if is_on_board(toX, toY) and ((has_square(enemy.board(), toX, toY) or ((toX, toY) in player.en_passent_targets)) or not checkCheck):
+        if not checkCheck or not __check_check(player, enemy, x, y, toX, toY):
+            accessible_squares |= flag_piece(toX, toY)
+            targets_list.append((toX, toY))
+            
+    toX = x - 1
+    toY = y + player.forward()
+    if is_on_board(toX, toY) and ((has_square(enemy.board(), toX, toY) or ((toX, toY) in player.en_passent_targets)) or not checkCheck):
+        if not checkCheck or not __check_check(player, enemy, x, y, toX, toY):
+            accessible_squares |= flag_piece(toX, toY)
+            targets_list.append((toX, toY))
 
-        behind = y - fw
-        has_not_moved = ((behind == 0) or (behind == 7)) and (behind >= 0) and (behind < BOARD_SIZE)
-        if has_not_moved:
-            position = offset_of(x, y + 2 * fw)
-            if __check_board(position, enemy_board) and __check_board(position, friend_board):
-                flag = flag_piece(x, y + 2 * fw)
-                if checkCheck and __check_check(player, enemy, x, y, x, y + 2 * fw):
-                    flag = 0
-                elif checkCheck:
-                    targets_list.append((x, y + 2 * fw))
-                accessable_squares |= flag
-
-    if is_on_board(x + 1, y + fw):
-        position = offset_of(x + 1, y + fw)
-        if not(checkCheck) or not(__check_board(position, enemy_board)) or ((x + 1, y + fw) in player.en_passent_targets):
-            accessable_squares |= flag_piece(x + 1, y + fw)
-            targets_list.append((x + 1, y + fw))
-
-    if is_on_board(x - 1, y + fw):
-        position = offset_of(x - 1, y + fw)
-        if not(checkCheck) or not(__check_board(position, enemy_board)) or ((x - 1, y + fw) in player.en_passent_targets):
-            accessable_squares |= flag_piece(x - 1, y + fw)
-            targets_list.append((x - 1, y + fw))
-
-    return accessable_squares
+    return accessible_squares
 
 
 def calculate_knight(x, y, player, enemy, checkCheck, targets_list):
-    accessible_squares = 0
-
     targets = [
         (x + 1, y + 2),
         (x + 2, y + 1),
@@ -136,30 +115,26 @@ def calculate_knight(x, y, player, enemy, checkCheck, targets_list):
         (x - 2, y - 1),
     ]
 
-    clearance = __clearance_mask(player.board(), enemy.board(), checkCheck)
+    accessable_squares = 0
 
     for target in targets:
-        tx = target[0]
-        ty = target[1]
-        if is_on_board(tx, ty):
-            flag = flag_piece(tx, ty)
-            if not(checkCheck and __check_check(player, enemy, x, y, tx, ty)) and ((flag & clearance) == 0):
-                accessible_squares |= flag
-                targets_list.append((tx, ty))
-    
-    accessible_squares &= clearance
-    return accessible_squares
+        toX = target[0]
+        toY = target[1]
+        if is_on_board(toX, toY):
+            if not checkCheck or (not has_square(player.board(), toX, toY) and not __check_check(player, enemy, x, y, toX, toY)):
+                accessable_squares |= flag_piece(toX, toY)
+                targets_list.append((toX, toY))
+
+    return accessable_squares
 
 
 def __handle_direction(x, y, toX, toY, dir_valid, accessable_squares, player, enemy, checkCheck, targets_list):
-    if is_on_board(toX, toY) and (__check_board(offset_of(toX, toY), player.board()) or not(checkCheck)) and dir_valid:
-        flag = flag_piece(toX, toY)
-        if not(checkCheck and __check_check(player, enemy, x, y, toX, toY)):
-            accessable_squares |= flag
-            targets_list.append((toX, toY))
-        if not __check_board(offset_of(toX, toY), enemy.board()):
-            dir_valid = False
-    else:
+    if not is_on_board(toX, toY) or not dir_valid:
+        return accessable_squares, False
+    if not checkCheck or (not has_square(player.board(), toX, toY) and not __check_check(player, enemy, x, y, toX, toY)):
+        accessable_squares |= flag_piece(toX, toY)
+        targets_list.append((toX, toY))
+    if has_square(player.board() | enemy.board(), toX, toY):
         dir_valid = False
     return accessable_squares, dir_valid
 
@@ -212,44 +187,42 @@ def calculate_queen(x, y, player, enemy, checkCheck, targets_list):
 
 
 def calculate_king(x, y, player, enemy, checkCheck, targets_list):
-    accessible_squares = 0
-
     targets = [
         (x + 1, y),
         (x - 1, y),
         (x, y + 1),
         (x, y - 1),
         (x + 1, y + 1),
-        (x - 1, y + 1),
         (x + 1, y - 1),
+        (x - 1, y + 1),
         (x - 1, y - 1)
     ]
 
+    accessable_squares = 0
+
     for target in targets:
-        tx = target[0]
-        ty = target[1]
-        if is_on_board(tx, ty) and not has_square(player.board(), tx, ty):
-            flag = flag_piece(tx, ty)
-            if not(checkCheck and __check_check(player, enemy, x, y, tx, ty)):
-                accessible_squares |= flag
-                targets_list.append((tx, ty))
+        toX = target[0]
+        toY = target[1]
+        if is_on_board(toX, toY):
+            if not checkCheck or (not has_square(player.board(), toX, toY) and not __check_check(player, enemy, x, y, toX, toY)):
+                accessable_squares |= flag_piece(toX, toY)
+                targets_list.append((toX, toY))
 
     if checkCheck:
         if player.can_castle_queenside:
-            attacked_squares = calculate_attacked_squares(enemy, __create_dummy_player(player, x, y, x - 3, y))
-            castling_check = flag_piece(x, y) | flag_piece(x - 1, y) | flag_piece(x - 2, y) | flag_piece(x - 3, y)
-            if (castling_check & ~(player.board() | enemy.board() | attacked_squares)) == castling_check:
-                accessible_squares |= flag_piece(x - 2, y)
+            toCheck = flag_piece(x, y) | flag_piece(x - 1) | flag_piece(x - 2) | flag_piece(x - 3)
+            attacked = calculate_attacked_squares(enemy, __create_dummy_player(player, x, y, x - 3, y))
+            if not(toCheck & attacked):
+                accessable_squares |= flag_piece(x - 2, y)
                 targets_list.append((x - 2, y))
-            
         if player.can_castle_kingside:
-            attacked_squares = calculate_attacked_squares(enemy, __create_dummy_player(player, x, y, x + 2, y))
-            castling_check = flag_piece(x, y) | flag_piece(x + 1, y) | flag_piece(x + 2, y)
-            if (castling_check & ~(player.board() | enemy.board() | attacked_squares)) == castling_check:
-                accessible_squares |= flag_piece(x + 2, y)
+            toCheck = flag_piece(x, y) | flag_piece(x + 1) | flag_piece(x + 2)
+            attacked = calculate_attacked_squares(enemy, __create_dummy_player(player, x, y, x + 2, y))
+            if not(toCheck & attacked):
+                accessable_squares |= flag_piece(x + 2, y)
                 targets_list.append((x + 2, y))
 
-    return accessible_squares
+    return accessable_squares
 
 
 def calculate_attacked_squares(player, enemy):
@@ -261,7 +234,7 @@ def calculate_attacked_squares(player, enemy):
                 piece_mask = pieces[piece]
                 if has_square(piece_mask, x, y):
                     if piece == PAWN:
-                        attacked_squares |= calculate_pawn(x, y, enemy, enemy, False, [])
+                        attacked_squares |= calculate_pawn(x, y, player, enemy, False, [])
                     elif piece == ROOK:
                         attacked_squares |= calculate_rook(x, y, player, enemy, False, [])
                     elif piece == KNIGHT:
