@@ -19,7 +19,7 @@ QUEEN = 1 << 4
 KING = 1 << 5
 
 
-STARTING_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+STARTING_FEN = "3qk3/8/8/8/8/8/PPPPPPPP/4K3 w - - 0 1"
 
 
 NULL_SQUARE = (-1, -1)

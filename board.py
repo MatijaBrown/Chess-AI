@@ -2,6 +2,9 @@ from common import *
 import pieces
 
 
+import tkinter as tk
+
+
 WHITE_COLOUR = "#DDB88C"
 BLACK_COLOUR = "#A66D4F"
 SELECTED_COLOUR = "orange"
@@ -28,6 +31,8 @@ class Board():
         self.black_pieces = { PAWN: 0, ROOK: 0, KNIGHT: 0, BISHOP: 0, QUEEN: 0, KING: 0 }
         self.white_squares = 0
         self.black_squares = 0
+
+        self.value = 0
 
     def __get_current_player(self):
         return self.player_white if self.chess.current_side == SIDE_WHITE else self.player_black
@@ -140,6 +145,10 @@ class Board():
         self.__recalculate_flags()
 
     def __on_pawn_move(self, toX, toY):
+        if ((toY == 0) or (toY == 7)) and (self.selected != NULL_SQUARE):
+            self.remove_piece(toX, toY)
+            self.set_piece(toX, toY, self.__get_current_player().select_piece())
+
         pieces.handle_en_passent_targets(self.player_black if self.chess.current_side == SIDE_WHITE else self.player_white, self.selected, toX, toY)
         if not((toX, toY) in self.__get_current_player().en_passent_targets):
             return
@@ -173,6 +182,12 @@ class Board():
         elif abs(piece) == KING:
             self.__on_king_move(fromX, fromY, toX)
         self.__recalculate_flags()
+
+    def move_piece_side(self, fromX, fromY, toX, toY, side):
+        cache = self.chess.current_side
+        self.chess.current_side = side
+        self.move_piece(fromX, fromY, toX, toY)
+        self.chess.current_side = cache
 
     def __draw_squares(self):
         self.canvas.delete("square")

@@ -79,18 +79,20 @@ def __check_check(player, enemy, fromX, fromY, toX, toY):
     return False
 
 
-def calculate_pawn(x, y, player, enemy, checkCheck):
-    fw = player.forward()
-
+def calculate_pawn(x, y, player, enemy, checkCheck, targets_list):
     accessable_squares = 0
 
+    fw = player.forward()
     friend_board = player.board()
     enemy_board = enemy.board()
+    
     position = offset_of(x, y + fw)
     if __check_board(position, enemy_board) and __check_board(position, friend_board):
         flag = flag_piece(x, y + fw)
         if checkCheck and __check_check(player, enemy, x, y, x, y + fw):
             flag = 0
+        elif checkCheck:
+            targets_list.append((x, y + fw))
         accessable_squares |= flag
 
         behind = y - fw
@@ -101,24 +103,26 @@ def calculate_pawn(x, y, player, enemy, checkCheck):
                 flag = flag_piece(x, y + 2 * fw)
                 if checkCheck and __check_check(player, enemy, x, y, x, y + 2 * fw):
                     flag = 0
+                elif checkCheck:
+                    targets_list.append((x, y + 2 * fw))
                 accessable_squares |= flag
 
     if is_on_board(x + 1, y + fw):
         position = offset_of(x + 1, y + fw)
-        protecting = not(checkCheck) and not(__check_board(position, friend_board))
-        if not(__check_board(position, enemy_board)) or ((x + 1, y + fw) in player.en_passent_targets) or protecting:
+        if not(checkCheck) or not(__check_board(position, enemy_board)) or ((x + 1, y + fw) in player.en_passent_targets):
             accessable_squares |= flag_piece(x + 1, y + fw)
+            targets_list.append((x + 1, y + fw))
 
     if is_on_board(x - 1, y + fw):
         position = offset_of(x - 1, y + fw)
-        protecting = not(checkCheck) and not(__check_board(position, friend_board))
-        if not(__check_board(position, enemy_board)) or ((x - 1, y + fw) in player.en_passent_targets) or protecting:
+        if not(checkCheck) or not(__check_board(position, enemy_board)) or ((x - 1, y + fw) in player.en_passent_targets):
             accessable_squares |= flag_piece(x - 1, y + fw)
+            targets_list.append((x - 1, y + fw))
 
     return accessable_squares
 
 
-def calculate_knight(x, y, player, enemy, checkCheck):
+def calculate_knight(x, y, player, enemy, checkCheck, targets_list):
     accessible_squares = 0
 
     targets = [
@@ -132,25 +136,27 @@ def calculate_knight(x, y, player, enemy, checkCheck):
         (x - 2, y - 1),
     ]
 
+    clearance = __clearance_mask(player.board(), enemy.board(), checkCheck)
+
     for target in targets:
         tx = target[0]
         ty = target[1]
         if is_on_board(tx, ty):
             flag = flag_piece(tx, ty)
-            if checkCheck and __check_check(player, enemy, x, y, tx, ty):
-                flag = 0
-            accessible_squares |= flag
+            if not(checkCheck and __check_check(player, enemy, x, y, tx, ty)) and ((flag & clearance) == 0):
+                accessible_squares |= flag
+                targets_list.append((tx, ty))
     
-    accessible_squares &= __clearance_mask(player.board(), enemy.board(), checkCheck)
+    accessible_squares &= clearance
     return accessible_squares
 
 
-def __handle_direction(x, y, toX, toY, dir_valid, accessable_squares, player, enemy, checkCheck):
+def __handle_direction(x, y, toX, toY, dir_valid, accessable_squares, player, enemy, checkCheck, targets_list):
     if is_on_board(toX, toY) and (__check_board(offset_of(toX, toY), player.board()) or not(checkCheck)) and dir_valid:
         flag = flag_piece(toX, toY)
-        if checkCheck and __check_check(player, enemy, x, y, toX, toY):
-            flag = 0
-        accessable_squares |= flag
+        if not(checkCheck and __check_check(player, enemy, x, y, toX, toY)):
+            accessable_squares |= flag
+            targets_list.append((toX, toY))
         if not __check_board(offset_of(toX, toY), enemy.board()):
             dir_valid = False
     else:
@@ -158,7 +164,7 @@ def __handle_direction(x, y, toX, toY, dir_valid, accessable_squares, player, en
     return accessable_squares, dir_valid
 
 
-def calculate_rook(x, y, player, enemy, checkCheck):
+def calculate_rook(x, y, player, enemy, checkCheck, targets_list):
     accessable_squares = 0
     count = 1
     t = True
@@ -166,15 +172,15 @@ def calculate_rook(x, y, player, enemy, checkCheck):
     l = True
     r = True
     while t or b or l or r:
-        accessable_squares, r = __handle_direction(x, y, x + count, y, r, accessable_squares, player, enemy, checkCheck)
-        accessable_squares, l = __handle_direction(x, y, x - count, y, l, accessable_squares, player, enemy, checkCheck)
-        accessable_squares, b = __handle_direction(x, y, x, y + count, b, accessable_squares, player, enemy, checkCheck)
-        accessable_squares, t = __handle_direction(x, y, x, y - count, t, accessable_squares, player, enemy, checkCheck)
+        accessable_squares, r = __handle_direction(x, y, x + count, y, r, accessable_squares, player, enemy, checkCheck, targets_list)
+        accessable_squares, l = __handle_direction(x, y, x - count, y, l, accessable_squares, player, enemy, checkCheck, targets_list)
+        accessable_squares, b = __handle_direction(x, y, x, y + count, b, accessable_squares, player, enemy, checkCheck, targets_list)
+        accessable_squares, t = __handle_direction(x, y, x, y - count, t, accessable_squares, player, enemy, checkCheck, targets_list)
         count += 1
     return accessable_squares
 
 
-def calculate_bishop(x, y, player, enemy, checkCheck):
+def calculate_bishop(x, y, player, enemy, checkCheck, targets_list):
     accessable_squares = 0
     count = 1
     tl = True
@@ -184,30 +190,29 @@ def calculate_bishop(x, y, player, enemy, checkCheck):
     while tl or bl or tr or br:
         cx = x + count
         cy = y + count
-        accessable_squares, br = __handle_direction(x, y, cx, cy, br, accessable_squares, player, enemy, checkCheck)
+        accessable_squares, br = __handle_direction(x, y, cx, cy, br, accessable_squares, player, enemy, checkCheck, targets_list)
         cx = x - count
         cy = y + count
-        accessable_squares, bl = __handle_direction(x, y, cx, cy, bl, accessable_squares, player, enemy, checkCheck)
+        accessable_squares, bl = __handle_direction(x, y, cx, cy, bl, accessable_squares, player, enemy, checkCheck, targets_list)
         cx = x + count
         cy = y - count
-        accessable_squares, tr = __handle_direction(x, y, cx, cy, tr, accessable_squares, player, enemy, checkCheck)
+        accessable_squares, tr = __handle_direction(x, y, cx, cy, tr, accessable_squares, player, enemy, checkCheck, targets_list)
         cx = x - count
         cy = y - count
-        accessable_squares, tl = __handle_direction(x, y, cx, cy, tl, accessable_squares, player, enemy, checkCheck)
+        accessable_squares, tl = __handle_direction(x, y, cx, cy, tl, accessable_squares, player, enemy, checkCheck, targets_list)
         count += 1
     return accessable_squares
 
 
-def calculate_queen(x, y, player, enemy, checkCheck):
-    straight_accessable_squares = calculate_rook(x, y, player, enemy, checkCheck)
-    diagonal_accessable_squares = calculate_bishop(x, y, player, enemy, checkCheck)
+def calculate_queen(x, y, player, enemy, checkCheck, targets_list):
+    straight_accessable_squares = calculate_rook(x, y, player, enemy, checkCheck, targets_list)
+    diagonal_accessable_squares = calculate_bishop(x, y, player, enemy, checkCheck, targets_list)
     accessable_squares = straight_accessable_squares | diagonal_accessable_squares
     return accessable_squares
 
 
-def calculate_king(x, y, player, enemy, checkCheck):
+def calculate_king(x, y, player, enemy, checkCheck, targets_list):
     accessible_squares = 0
-    clearance = __clearance_mask(player.board(), enemy.board(), checkCheck) & ~flag_piece(x, y)
 
     targets = [
         (x + 1, y),
@@ -223,11 +228,11 @@ def calculate_king(x, y, player, enemy, checkCheck):
     for target in targets:
         tx = target[0]
         ty = target[1]
-        if is_on_board(tx, ty) and has_square(clearance, tx, ty):
+        if is_on_board(tx, ty) and not has_square(player.board(), tx, ty):
             flag = flag_piece(tx, ty)
-            if checkCheck and __check_check(player, enemy, x, y, tx, ty):
-                flag = 0
-            accessible_squares |= flag
+            if not(checkCheck and __check_check(player, enemy, x, y, tx, ty)):
+                accessible_squares |= flag
+                targets_list.append((tx, ty))
 
     if checkCheck:
         if player.can_castle_queenside:
@@ -235,12 +240,14 @@ def calculate_king(x, y, player, enemy, checkCheck):
             castling_check = flag_piece(x, y) | flag_piece(x - 1, y) | flag_piece(x - 2, y) | flag_piece(x - 3, y)
             if (castling_check & ~(player.board() | enemy.board() | attacked_squares)) == castling_check:
                 accessible_squares |= flag_piece(x - 2, y)
+                targets_list.append((x - 2, y))
             
         if player.can_castle_kingside:
             attacked_squares = calculate_attacked_squares(enemy, __create_dummy_player(player, x, y, x + 2, y))
             castling_check = flag_piece(x, y) | flag_piece(x + 1, y) | flag_piece(x + 2, y)
             if (castling_check & ~(player.board() | enemy.board() | attacked_squares)) == castling_check:
                 accessible_squares |= flag_piece(x + 2, y)
+                targets_list.append((x + 2, y))
 
     return accessible_squares
 
@@ -254,17 +261,17 @@ def calculate_attacked_squares(player, enemy):
                 piece_mask = pieces[piece]
                 if has_square(piece_mask, x, y):
                     if piece == PAWN:
-                        attacked_squares |= calculate_pawn(x, y, enemy, enemy, False)
+                        attacked_squares |= calculate_pawn(x, y, enemy, enemy, False, [])
                     elif piece == ROOK:
-                        attacked_squares |= calculate_rook(x, y, player, enemy, False)
+                        attacked_squares |= calculate_rook(x, y, player, enemy, False, [])
                     elif piece == KNIGHT:
-                        attacked_squares |= calculate_knight(x, y, player, enemy, False)
+                        attacked_squares |= calculate_knight(x, y, player, enemy, False, [])
                     elif piece == BISHOP:
-                        attacked_squares |= calculate_bishop(x, y, player, enemy, False)
+                        attacked_squares |= calculate_bishop(x, y, player, enemy, False, [])
                     elif piece == QUEEN:
-                        attacked_squares |= calculate_queen(x, y, player, enemy, False)
+                        attacked_squares |= calculate_queen(x, y, player, enemy, False, [])
                     elif piece == KING:
-                        attacked_squares |= calculate_king(x, y, player, enemy, False)
+                        attacked_squares |= calculate_king(x, y, player, enemy, False, [])
     return attacked_squares
 
 
@@ -276,18 +283,42 @@ def calculate_pieces(player, enemy):
             for piece in pieces.keys():
                 if has_square(pieces[piece], x, y):
                     if piece == PAWN:
-                        possible_moves[(x, y)] = calculate_pawn(x, y, player, enemy, True)
+                        possible_moves[(x, y)] = calculate_pawn(x, y, player, enemy, True, [])
                     elif piece == ROOK:
-                        possible_moves[(x, y)] = calculate_rook(x, y, player, enemy, True)
+                        possible_moves[(x, y)] = calculate_rook(x, y, player, enemy, True, [])
                     elif piece == KNIGHT:
-                        possible_moves[(x, y)] = calculate_knight(x, y, player, enemy, True)
+                        possible_moves[(x, y)] = calculate_knight(x, y, player, enemy, True, [])
                     elif piece == BISHOP:
-                        possible_moves[(x, y)] = calculate_bishop(x, y, player, enemy, True)
+                        possible_moves[(x, y)] = calculate_bishop(x, y, player, enemy, True, [])
                     elif piece == QUEEN:
-                        possible_moves[(x, y)] = calculate_queen(x, y, player, enemy, True)
+                        possible_moves[(x, y)] = calculate_queen(x, y, player, enemy, True, [])
                     elif piece == KING:
-                        possible_moves[(x, y)] = calculate_king(x, y, player, enemy, True)
+                        possible_moves[(x, y)] = calculate_king(x, y, player, enemy, True, [])
     return possible_moves
+
+
+
+def calculate_pieces_list(player, enemy):
+    targets = {}
+    pieces = player.pieces()
+    for x in range(BOARD_SIZE):
+        for y in range(BOARD_SIZE):
+            for piece in pieces.keys():
+                if has_square(pieces[piece], x, y):
+                    targets[(x, y)] = []
+                    if piece == PAWN:
+                        calculate_pawn(x, y, player, enemy, True, targets[(x, y)])
+                    elif piece == ROOK:
+                        calculate_rook(x, y, player, enemy, True, targets[(x, y)])
+                    elif piece == KNIGHT:
+                        calculate_knight(x, y, player, enemy, True, targets[(x, y)])
+                    elif piece == BISHOP:
+                        calculate_bishop(x, y, player, enemy, True, targets[(x, y)])
+                    elif piece == QUEEN:
+                        calculate_queen(x, y, player, enemy, True, targets[(x, y)])
+                    elif piece == KING:
+                        calculate_king(x, y, player, enemy, True, targets[(x, y)])
+    return targets
 
 
 def handle_en_passent_targets(player, selected, toX, toY):

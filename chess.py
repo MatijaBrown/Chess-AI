@@ -18,12 +18,12 @@ class Chess(tk.Frame):
         self.canvas = tk.Canvas(self, width=self.canvas_size, height=self.canvas_size, background="white")
         self.canvas.pack(side=tk.TOP, fill=tk.BOTH, anchor="c", expand=tk.TRUE)
 
-        self.canvas.bind("<Configure>", self.__refresh)
+        self.canvas.bind("<Configure>", self.refresh)
         self.canvas.bind("<Button-1>", self.__click)
 
         self.board = board.Board(self)
 
-        self.player_white = players.AiPlayer(self, SIDE_WHITE)
+        self.player_white = players.HumanPlayer(self, SIDE_WHITE)
         self.board.player_white = self.player_white
         self.player_black = players.HumanPlayer(self, SIDE_BLACK)
         self.board.player_black = self.player_black
@@ -54,29 +54,36 @@ class Chess(tk.Frame):
         return self.get_player(self.current_side)
 
     def set_side(self, side):
-        self.__refresh()
         if self.get_current_player():
             self.get_current_player().post_turn()
         self.current_side = side
         if self.get_current_player():
             self.get_current_player().pre_turn()
+            self.status_label["text"] = "White's Turn" if self.current_side == SIDE_WHITE else "Blacks' Turn"
+        self.refresh()
+
+    def switch_side(self):
         if self.get_current_player().lost():
             self.status_label["text"] = "White won!" if self.current_side == SIDE_BLACK else "Black won!"
+            self.current_side = SIDE_NONE
         elif self.get_current_player().drew():
             self.status_label["text"] = "White " if self.current_side == SIDE_BLACK else "Black " + "is in check but can't move. It's a draw!"
-        else:
-            self.status_label["text"] = "White's Turn" if self.current_side == SIDE_WHITE else "Blacks' Turn"
+            self.current_side = SIDE_NONE
+        self.set_side(-self.current_side)
+        if self.get_current_player():
+            self.get_current_player().move()
 
     def __click(self, event):
-        if not(self.get_current_player()):
+        if not self.get_current_player():
             return
         sX = int(event.x / self.square_size)
         sY = int(event.y / self.square_size)
-        if self.get_current_player().on_click(sX, sY):
-            self.set_side(-self.current_side)
-        self.__refresh()
+        if self.get_current_player().on_click(sX, sY) or self.get_current_player().lost() or self.get_current_player().drew():
+            self.switch_side()
+        else:
+            self.refresh()
 
-    def __refresh(self, event = None):
+    def refresh(self, event = None):
         if event:
             sizeX = int((event.width - 1) / BOARD_SIZE)
             sizeY = int((event.height - 1) / BOARD_SIZE)
@@ -85,4 +92,5 @@ class Chess(tk.Frame):
 
     def __reset(self):
         self.board.reset()
-        self.__refresh()
+        self.refresh()
+        self.get_current_player().move()
