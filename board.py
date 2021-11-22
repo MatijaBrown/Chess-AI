@@ -1,3 +1,4 @@
+from math import pi
 from common import *
 import pieces
 
@@ -32,7 +33,7 @@ class Board():
         self.white_squares = 0
         self.black_squares = 0
 
-        self.value = 0
+        self.board_value = 0
 
     def __get_current_player(self):
         return self.player_white if self.chess.current_side == SIDE_WHITE else self.player_black
@@ -50,6 +51,9 @@ class Board():
                 self.black_squares |= self.pieces[key]
                 self.black_pieces[abs(key)] = self.pieces[key]
     
+    def value(self):
+        return self.board_value
+
     def load_fen(self, fen):
         x = 0
         y = 0
@@ -77,12 +81,13 @@ class Board():
                 piece = KING
             if piece != EMPTY:
                 self.set_piece(x, y, side * piece)
+                self.board_value += value_of_piece(side * piece, x, y)
             x += 1
             index += 1
             char = fen[index]
         index += 1
         char = fen[index]
-        self.chess.set_side(SIDE_WHITE if char == 'w' else SIDE_BLACK)
+        self.chess.current_side = SIDE_WHITE if char == 'w' else SIDE_BLACK
         index += 2
         castling = fen[index:]
         if 'K' in castling:
@@ -97,7 +102,7 @@ class Board():
         if 'q' in castling:
             self.player_black.can_castle_queenside = True
             index += 1
-        self.chess.get_current_player().pre_turn()
+        self.chess.get_current_player().pre_turn(0)
         index += 1
         while fen[index] != ' ':
             if fen[index].isalpha():
@@ -111,6 +116,63 @@ class Board():
                     print("ERROR: Invalid en-passent-target", target, "!")
             index += 1
         self.__recalculate_flags()
+
+    def generate_fen(self):
+        fen = ""
+        a = 0
+        for y in range(BOARD_SIZE):
+            line = ""
+            for x in range(BOARD_SIZE):
+                piece = self.get_piece_at(x, y)
+                p = ""
+                if abs(piece) == PAWN:
+                    p = "p"
+                elif abs(piece) == ROOK:
+                    p = "r"
+                elif abs(piece) == KNIGHT:
+                    p = "n"
+                elif abs(piece) == BISHOP:
+                    p = "b"
+                elif abs(piece) == QUEEN:
+                    p = "q"
+                elif abs(piece) == KING:
+                    p = "k"
+                else:
+                    a += 1
+                    continue
+                if abs(piece) != EMPTY:
+                    if a > 0:
+                        line += str(a)
+                        a = 0
+                    line += p if is_on_side(piece, SIDE_BLACK) else p.upper()
+            if a > 0:
+                line += str(a)
+            fen += line
+            if y < (BOARD_SIZE - 1):
+                fen += "/"
+            a = 0
+        fen += " "
+        fen += "w " if self.__get_current_player().side == SIDE_WHITE else "b " 
+        if self.player_white.can_castle_kingside:
+            fen += "K"
+        if self.player_white.can_castle_queenside:
+            fen += "Q"
+        if self.player_black.can_castle_kingside:
+            fen += "k"
+        if self.player_black.can_castle_queenside:
+            fen += "q"
+        if fen[-1] != " ":
+            fen += " "
+        else:
+            fen += " - "
+        for target in self.player_white.en_passent_targets:
+            fen += tuple_to_square_name(target)
+        for target in self.player_black.en_passent_targets:
+            fen += tuple_to_square_name(target)
+        if fen[-1] == " ":
+            fen += "-"
+        fen += " 0 1"
+        return fen
 
     def reset(self):
         for key in self.pieces.keys():
@@ -135,12 +197,14 @@ class Board():
 
     def remove_piece(self, boardX, boardY):
         piece = self.get_piece_at(boardX, boardY)
+        self.board_value -= value_of_piece(piece, boardX, boardY)
         if piece == EMPTY:
             return
         self.pieces[piece] &= ~flag_piece(boardX, boardY)
         self.__recalculate_flags()
 
     def set_piece(self, boardX, boardY, piece):
+        self.board_value += value_of_piece(piece, boardX, boardY)
         self.pieces[piece] |= flag_piece(boardX, boardY)
         self.__recalculate_flags()
 

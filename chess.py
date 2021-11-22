@@ -3,6 +3,7 @@ from common import *
 import board
 import players
 import pieces
+import ai
 
 import tkinter as tk
 
@@ -12,6 +13,8 @@ class Chess(tk.Frame):
         self.top = top
         self.square_size = 64
         self.canvas_size = self.square_size * BOARD_SIZE
+
+        self.move_count = 0
 
         tk.Frame.__init__(self, self.top)
 
@@ -25,7 +28,7 @@ class Chess(tk.Frame):
 
         self.player_white = players.HumanPlayer(self, SIDE_WHITE)
         self.board.player_white = self.player_white
-        self.player_black = players.HumanPlayer(self, SIDE_BLACK)
+        self.player_black = players.AiPlayer(self, SIDE_BLACK)
         self.board.player_black = self.player_black
         self.current_side = SIDE_NONE
 
@@ -58,23 +61,24 @@ class Chess(tk.Frame):
             self.get_current_player().post_turn()
         self.current_side = side
         if self.get_current_player():
-            self.get_current_player().pre_turn()
+            self.get_current_player().pre_turn(self.move_count)
             self.status_label["text"] = "White's Turn" if self.current_side == SIDE_WHITE else "Blacks' Turn"
         self.refresh()
 
     def switch_side(self):
+        self.move_count += 1
         if self.get_current_player().lost():
             self.status_label["text"] = "White won!" if self.current_side == SIDE_BLACK else "Black won!"
             self.current_side = SIDE_NONE
         elif self.get_current_player().drew():
-            self.status_label["text"] = "White " if self.current_side == SIDE_BLACK else "Black " + "is in check but can't move. It's a draw!"
+            self.status_label["text"] = ("Black" if self.current_side == SIDE_BLACK else "White") + " is in check but can't move. It's a draw!"
             self.current_side = SIDE_NONE
         self.set_side(-self.current_side)
         if self.get_current_player():
             self.get_current_player().move()
 
     def __click(self, event):
-        if not self.get_current_player():
+        if not self.get_current_player() or (self.current_side == SIDE_NONE):
             return
         sX = int(event.x / self.square_size)
         sY = int(event.y / self.square_size)

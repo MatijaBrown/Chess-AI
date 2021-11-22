@@ -72,7 +72,7 @@ class HumanPlayer(Player):
                 break
         return cant_move
 
-    def pre_turn(self):
+    def pre_turn(self, _):
         enemy = self.chess.get_player(-self.chess.current_side)
         self.accessible_squares = pss.calculate_pieces(self, enemy)
         self.chess_board.highlighted = self.accessible_squares
@@ -84,7 +84,7 @@ class HumanPlayer(Player):
             board.player_white = dummy
         else:
             board.player_black = dummy
-        if self.__cant_move() and pss.calculate_attacked_squares(self.chess.get_player(-self.side), dummy):
+        if self.__cant_move() and (self.king() & pss.calculate_attacked_squares(self.chess.get_player(-self.side), dummy)):
             self.loss = True
         elif self.__cant_move():
             self.draw = True
@@ -101,7 +101,7 @@ class HumanPlayer(Player):
     def on_click(self, gridX, gridY):
         if (self.selected in self.accessible_squares.keys()) and has_square(self.accessible_squares[self.selected], gridX, gridY):
             self.chess_board.move_piece(self.selected[0], self.selected[1], gridX, gridY)
-            self.chess.switch_side()
+            return True
         else:
             self.__update_selected(gridX, gridY)
             self.chess_board.selected = self.selected
@@ -121,12 +121,14 @@ class AiPlayer(Player):
     def __init__(self, chess, side):
         super().__init__(chess, chess.board, side)
 
-    def pre_turn(self):
+    def pre_turn(self, move_count):
         enemy = self.chess.get_player(-self.chess.current_side)
         accessible_squares = pss.calculate_pieces_list(self, enemy)
-        self.possible_moves = ai.create_all_moves(accessible_squares, self.chess_board, self.side)
-
-        self.selected_move = ai.pick_move(self.possible_moves)
+        self.possible_moves = ai.create_all_moves(accessible_squares, self.chess_board, self, enemy, move_count)
+        if isinstance(self.possible_moves, ai.Move):
+            self.selected_move = self.possible_moves
+        else:
+            self.selected_move = ai.pick_move(self.possible_moves, self.chess_board, self, enemy)
 
     def move(self):
         if self.selected_move.fromX > -1:
@@ -139,7 +141,7 @@ class AiPlayer(Player):
                 board.player_white = dummy
             else:
                 board.player_black = dummy
-            if pss.calculate_attacked_squares(self.chess.get_player(-self.side), dummy):
+            if self.king() & pss.calculate_attacked_squares(self.chess.get_player(-self.side), dummy):
                 self.loss = True
             else:
                 self.draw = True

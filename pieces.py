@@ -48,10 +48,6 @@ def draw_piece(piece, boardX, boardY, square_size, canvas):
     canvas.create_image(x0, y0, image=texture, tags=(piece, "piece"), anchor='c')
 
 
-def __check_board(position, board):
-    return (board & (1 << position)) == 0
-
-
 def __create_dummy_player(player, oldX, oldY, newX, newY):
     board = copy.copy(player.chess_board)
     board.pieces = player.chess_board.pieces.copy()
@@ -81,10 +77,11 @@ def calculate_pawn(x, y, player, enemy, checkCheck, targets_list):
             targets_list.append((x, y + player.forward()))
         
         behind = y - player.forward()
-        if is_on_board(x, behind) and ((behind == 0) or (behind == 7)):
-            if not __check_check(player, enemy, x, y, x, y + 2 * player.forward()):
-                accessible_squares |= flag_piece(x, y + 2 * player.forward())
-                targets_list.append((x, y + 2 * player.forward()))
+        if is_on_board(x, behind) and ((behind == 0) or (behind == 7)) and is_on_board(x, y + 2 * player.forward()):
+            if not has_square(player.board() | enemy.board(), x, y + 2 * player.forward()):
+                if not __check_check(player, enemy, x, y, x, y + 2 * player.forward()):
+                    accessible_squares |= flag_piece(x, y + 2 * player.forward())
+                    targets_list.append((x, y + 2 * player.forward()))
                 
     toX = x + 1
     toY = y + player.forward()
@@ -210,15 +207,15 @@ def calculate_king(x, y, player, enemy, checkCheck, targets_list):
 
     if checkCheck:
         if player.can_castle_queenside:
-            toCheck = flag_piece(x, y) | flag_piece(x - 1) | flag_piece(x - 2) | flag_piece(x - 3)
+            toCheck = flag_piece(x, y) | flag_piece(x - 1, y) | flag_piece(x - 2, y) | flag_piece(x - 3, y)
             attacked = calculate_attacked_squares(enemy, __create_dummy_player(player, x, y, x - 3, y))
-            if not(toCheck & attacked):
+            if not(toCheck & (attacked | (player.board() & ~flag_piece(x, y)) | enemy.board())):
                 accessable_squares |= flag_piece(x - 2, y)
                 targets_list.append((x - 2, y))
         if player.can_castle_kingside:
-            toCheck = flag_piece(x, y) | flag_piece(x + 1) | flag_piece(x + 2)
+            toCheck = flag_piece(x, y) | flag_piece(x + 1, y) | flag_piece(x + 2, y)
             attacked = calculate_attacked_squares(enemy, __create_dummy_player(player, x, y, x + 2, y))
-            if not(toCheck & attacked):
+            if not(toCheck & (attacked | (player.board() & ~flag_piece(x, y)) | enemy.board())):
                 accessable_squares |= flag_piece(x + 2, y)
                 targets_list.append((x + 2, y))
 
