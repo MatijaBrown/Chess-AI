@@ -1,297 +1,231 @@
 from common import *
-from players import DummyPlayer
 
-from PIL import ImageTk
-import copy
+_pawn_attacks_white = []
+_pawn_attacks_black = []
 
-
-textures = {
-    SIDE_WHITE * PAWN: None, SIDE_WHITE * ROOK: None, SIDE_WHITE * KNIGHT: None, SIDE_WHITE * BISHOP: None, SIDE_WHITE * QUEEN: None, SIDE_WHITE * KING: None,
-    SIDE_BLACK * PAWN: None, SIDE_BLACK * ROOK: None, SIDE_BLACK * KNIGHT: None, SIDE_BLACK * BISHOP: None, SIDE_BLACK * QUEEN: None, SIDE_BLACK * KING: None
-}
-
-
-def __texture(name):
-    file = "./res/" + name + ".png"
-    return ImageTk.PhotoImage(file=file, width=60, height=60)
-
-
-def load_textures():
-    textures[SIDE_WHITE * PAWN] = __texture("white_pawn")
-    textures[SIDE_WHITE * ROOK] = __texture("white_rook")
-    textures[SIDE_WHITE * KNIGHT] = __texture("white_knight")
-    textures[SIDE_WHITE * BISHOP] = __texture("white_bishop")
-    textures[SIDE_WHITE * QUEEN] = __texture("white_queen")
-    textures[SIDE_WHITE * KING] = __texture("white_king")
-    
-    textures[SIDE_BLACK * PAWN] = __texture("black_pawn")
-    textures[SIDE_BLACK * ROOK] = __texture("black_rook")
-    textures[SIDE_BLACK * KNIGHT] = __texture("black_knight")
-    textures[SIDE_BLACK * BISHOP] = __texture("black_bishop")
-    textures[SIDE_BLACK * QUEEN] = __texture("black_queen")
-    textures[SIDE_BLACK * KING] = __texture("black_king")
-
-
-def __to_window_choords(boardX, boardY, square_size):
-    winX = boardX * square_size
-    winY = boardY * square_size
-    return winX, winY
-    
-
-def draw_piece(piece, boardX, boardY, square_size, canvas):
-    if piece == EMPTY:
-        return
-    texture = textures[piece]
-    x, y = __to_window_choords(boardX, boardY, square_size)
-    x0 = x + int(square_size / 2)
-    y0 = y + int(square_size / 2)
-    canvas.create_image(x0, y0, image=texture, tags=(piece, "piece"), anchor='c')
-
-
-def __create_dummy_player(player, oldX, oldY, newX, newY):
-    board = copy.copy(player.chess_board)
-    board.pieces = player.chess_board.pieces.copy()
-    dummy = DummyPlayer(board, player)
-    if player.side == SIDE_WHITE:
-        board.player_white = dummy
-    else:
-        board.player_black = dummy
-    board.move_piece(oldX, oldY, newX, newY)
-    return dummy
-
-
-def __check_check(player, enemy, fromX, fromY, toX, toY):
-    dummy = __create_dummy_player(player, fromX, fromY, toX, toY)
-    attacked = calculate_attacked_squares(enemy, dummy)
-    if dummy.king() & attacked:
-        return True
-    return False
-
-
-def calculate_pawn(x, y, player, enemy, checkCheck, targets_list):
-    accessible_squares = 0
-
-    if not has_square(player.board() | enemy.board(), x, y + player.forward()) and checkCheck: # Need to test forward only if really moving
-        if not __check_check(player, enemy, x, y, x, y + player.forward()):
-            accessible_squares |= flag_piece(x, y + player.forward())
-            targets_list.append((x, y + player.forward()))
-        
-        behind = y - player.forward()
-        if is_on_board(x, behind) and ((behind == 0) or (behind == 7)) and is_on_board(x, y + 2 * player.forward()):
-            if not has_square(player.board() | enemy.board(), x, y + 2 * player.forward()):
-                if not __check_check(player, enemy, x, y, x, y + 2 * player.forward()):
-                    accessible_squares |= flag_piece(x, y + 2 * player.forward())
-                    targets_list.append((x, y + 2 * player.forward()))
-                
-    toX = x + 1
-    toY = y + player.forward()
-    if is_on_board(toX, toY) and ((has_square(enemy.board(), toX, toY) or ((toX, toY) in player.en_passent_targets)) or not checkCheck):
-        if not checkCheck or not __check_check(player, enemy, x, y, toX, toY):
-            accessible_squares |= flag_piece(toX, toY)
-            targets_list.append((toX, toY))
+def _calculate_pawn_movements(): # Calculate for white. For black pieces just flip these boards.
+    for y in range(BOARD_SIZE):
+        for x in range(BOARD_SIZE):
+            if (y == 0) or (y == 7):
+                _pawn_attacks_white.append(0)
+                _pawn_attacks_black.append(0)
+                continue
             
-    toX = x - 1
-    toY = y + player.forward()
-    if is_on_board(toX, toY) and ((has_square(enemy.board(), toX, toY) or ((toX, toY) in player.en_passent_targets)) or not checkCheck):
-        if not checkCheck or not __check_check(player, enemy, x, y, toX, toY):
-            accessible_squares |= flag_piece(toX, toY)
-            targets_list.append((toX, toY))
+            location = offset_of(x, y)
 
-    return accessible_squares
+            mask = 0
+            if check_coords(x + 1, y - 1):
+                mask |= flag(location - 7)
+            if check_coords(x - 1, y - 1):
+                mask |= flag(location - 9)
+            _pawn_attacks_white.append(mask)
 
-
-def calculate_knight(x, y, player, enemy, checkCheck, targets_list):
-    targets = [
-        (x + 1, y + 2),
-        (x + 2, y + 1),
-        (x - 1, y + 2),
-        (x - 2, y + 1),
-        (x + 1, y - 2),
-        (x + 2, y - 1),
-        (x - 1, y - 2),
-        (x - 2, y - 1),
-    ]
-
-    accessable_squares = 0
-
-    for target in targets:
-        toX = target[0]
-        toY = target[1]
-        if is_on_board(toX, toY):
-            if not checkCheck or (not has_square(player.board(), toX, toY) and not __check_check(player, enemy, x, y, toX, toY)):
-                accessable_squares |= flag_piece(toX, toY)
-                targets_list.append((toX, toY))
-
-    return accessable_squares
+            mask = 0
+            if check_coords(x + 1, y + 1):
+                mask |= flag(location + 9)
+            if check_coords(x - 1, y + 1):
+                mask |= flag(location + 7)
+            _pawn_attacks_black.append(mask)
 
 
-def __handle_direction(x, y, toX, toY, dir_valid, accessable_squares, player, enemy, checkCheck, targets_list):
-    if not is_on_board(toX, toY) or not dir_valid:
-        return accessable_squares, False
-    if not checkCheck or (not has_square(player.board(), toX, toY) and not __check_check(player, enemy, x, y, toX, toY)):
-        accessable_squares |= flag_piece(toX, toY)
-        targets_list.append((toX, toY))
-    if has_square(player.board() | enemy.board(), toX, toY):
-        dir_valid = False
-    return accessable_squares, dir_valid
+_knight_movements = []
+
+def _calculate_knight_movements(): # Really simple, doesn't even require bitboarding or anything.
+    for y in range(BOARD_SIZE):
+        for x in range(BOARD_SIZE):
+            mask = 0
+            for yOff in (-2, -1, 1, 2):
+                for xOff in (-2, -1, 1, 2):
+                    if abs(xOff) == abs(yOff):
+                        continue
+                    posX = x + xOff
+                    posY = y + yOff
+                    if check_coords(posX, posY):
+                        mask |= flag(offset_of(posX, posY))
+            _knight_movements.append(mask)
 
 
-def calculate_rook(x, y, player, enemy, checkCheck, targets_list):
-    accessable_squares = 0
-    count = 1
-    t = True
-    b = True
-    l = True
-    r = True
-    while t or b or l or r:
-        accessable_squares, r = __handle_direction(x, y, x + count, y, r, accessable_squares, player, enemy, checkCheck, targets_list)
-        accessable_squares, l = __handle_direction(x, y, x - count, y, l, accessable_squares, player, enemy, checkCheck, targets_list)
-        accessable_squares, b = __handle_direction(x, y, x, y + count, b, accessable_squares, player, enemy, checkCheck, targets_list)
-        accessable_squares, t = __handle_direction(x, y, x, y - count, t, accessable_squares, player, enemy, checkCheck, targets_list)
-        count += 1
-    return accessable_squares
+_rook_movements_horiz = []
+_rook_movements_vert = []
+
+def _calculate_rook_movements():
+    for y in range(BOARD_SIZE):
+        for x in range(BOARD_SIZE):
+            vert = 0
+            horiz = 0
+            for my in range(BOARD_SIZE):
+                vert |= flag(offset_of(x, my))
+            for mx in range(BOARD_SIZE):
+                horiz |= flag(offset_of(mx, y))
+            _rook_movements_vert.append(vert)
+            _rook_movements_horiz.append(horiz)
 
 
-def calculate_bishop(x, y, player, enemy, checkCheck, targets_list):
-    accessable_squares = 0
-    count = 1
-    tl = True
-    bl = True
-    tr = True
-    br = True
-    while tl or bl or tr or br:
-        cx = x + count
-        cy = y + count
-        accessable_squares, br = __handle_direction(x, y, cx, cy, br, accessable_squares, player, enemy, checkCheck, targets_list)
-        cx = x - count
-        cy = y + count
-        accessable_squares, bl = __handle_direction(x, y, cx, cy, bl, accessable_squares, player, enemy, checkCheck, targets_list)
-        cx = x + count
-        cy = y - count
-        accessable_squares, tr = __handle_direction(x, y, cx, cy, tr, accessable_squares, player, enemy, checkCheck, targets_list)
-        cx = x - count
-        cy = y - count
-        accessable_squares, tl = __handle_direction(x, y, cx, cy, tl, accessable_squares, player, enemy, checkCheck, targets_list)
-        count += 1
-    return accessable_squares
+_bishop_movements_tlbr = []
+_bishop_movements_bltr = []
+
+def _calculate_bishop_movements():
+    for y in range(BOARD_SIZE):
+        for x in range(BOARD_SIZE):
+            tlbr = 0
+            bltr = 0
+            for mx in range(BOARD_SIZE):
+                dist = x - mx
+                if check_coords(mx, y + dist):
+                    bltr |= flag(offset_of(mx, y + dist))
+                if check_coords(mx, y - dist):
+                    tlbr |= flag(offset_of(mx, y - dist))
+            _bishop_movements_tlbr.append(tlbr)
+            _bishop_movements_bltr.append(bltr)
 
 
-def calculate_queen(x, y, player, enemy, checkCheck, targets_list):
-    straight_accessable_squares = calculate_rook(x, y, player, enemy, checkCheck, targets_list)
-    diagonal_accessable_squares = calculate_bishop(x, y, player, enemy, checkCheck, targets_list)
-    accessable_squares = straight_accessable_squares | diagonal_accessable_squares
-    return accessable_squares
+_king_movements = []
+
+def _calculate_king_movements():
+    for y in range(BOARD_SIZE):
+        for x in range(BOARD_SIZE):
+            mask = 0
+            for my in (-1, 0, 1):
+                for mx in (-1, 0, 1):
+                    if check_coords(x + mx, y + my) and not((mx == 0) and (my == 0)):
+                        mask |= flag(offset_of(x + mx, y + my))
+            _king_movements.append(mask & ~flag(offset_of(x, y)))
 
 
-def calculate_king(x, y, player, enemy, checkCheck, targets_list):
-    targets = [
-        (x + 1, y),
-        (x - 1, y),
-        (x, y + 1),
-        (x, y - 1),
-        (x + 1, y + 1),
-        (x + 1, y - 1),
-        (x - 1, y + 1),
-        (x - 1, y - 1)
-    ]
+def precalculate_movement_masks():
+    _calculate_pawn_movements()
+    _calculate_knight_movements()
+    _calculate_rook_movements()
+    _calculate_bishop_movements()
+    _calculate_king_movements()
 
-    accessable_squares = 0
-
-    for target in targets:
-        toX = target[0]
-        toY = target[1]
-        if is_on_board(toX, toY):
-            if not checkCheck or (not has_square(player.board(), toX, toY) and not __check_check(player, enemy, x, y, toX, toY)):
-                accessable_squares |= flag_piece(toX, toY)
-                targets_list.append((toX, toY))
-
-    if checkCheck:
-        if player.can_castle_queenside:
-            toCheck = flag_piece(x, y) | flag_piece(x - 1, y) | flag_piece(x - 2, y) | flag_piece(x - 3, y)
-            attacked = calculate_attacked_squares(enemy, __create_dummy_player(player, x, y, x - 3, y))
-            if not(toCheck & (attacked | (player.board() & ~flag_piece(x, y)) | enemy.board())):
-                accessable_squares |= flag_piece(x - 2, y)
-                targets_list.append((x - 2, y))
-        if player.can_castle_kingside:
-            toCheck = flag_piece(x, y) | flag_piece(x + 1, y) | flag_piece(x + 2, y)
-            attacked = calculate_attacked_squares(enemy, __create_dummy_player(player, x, y, x + 2, y))
-            if not(toCheck & (attacked | (player.board() & ~flag_piece(x, y)) | enemy.board())):
-                accessable_squares |= flag_piece(x + 2, y)
-                targets_list.append((x + 2, y))
-
-    return accessable_squares
+precalculate_movement_masks()
 
 
-def calculate_attacked_squares(player, enemy):
-    attacked_squares = 0
-    pieces = enemy.chess_board.white_pieces if player.side == SIDE_WHITE else enemy.chess_board.black_pieces
-    for x in range(BOARD_SIZE):
-        for y in range(BOARD_SIZE):
-            for piece in pieces.keys():
-                piece_mask = pieces[piece]
-                if has_square(piece_mask, x, y):
-                    if piece == PAWN:
-                        attacked_squares |= calculate_pawn(x, y, player, enemy, False, [])
-                    elif piece == ROOK:
-                        attacked_squares |= calculate_rook(x, y, player, enemy, False, [])
-                    elif piece == KNIGHT:
-                        attacked_squares |= calculate_knight(x, y, player, enemy, False, [])
-                    elif piece == BISHOP:
-                        attacked_squares |= calculate_bishop(x, y, player, enemy, False, [])
-                    elif piece == QUEEN:
-                        attacked_squares |= calculate_queen(x, y, player, enemy, False, [])
-                    elif piece == KING:
-                        attacked_squares |= calculate_king(x, y, player, enemy, False, [])
-    return attacked_squares
+def calculate_pawn(location: int, side_to_move: int, position):
+    attacks = _pawn_attacks_white if side_to_move == WHITE else _pawn_attacks_black
+    
+    mask = attacks[location]
+    mask |= (position.en_passent_targets & attacks[location]) << 8
+
+    return mask
 
 
-def calculate_pieces(player, enemy):
-    possible_moves = {}
-    pieces = player.pieces()
-    for x in range(BOARD_SIZE):
-        for y in range(BOARD_SIZE):
-            for piece in pieces.keys():
-                if has_square(pieces[piece], x, y):
-                    if piece == PAWN:
-                        possible_moves[(x, y)] = calculate_pawn(x, y, player, enemy, True, [])
-                    elif piece == ROOK:
-                        possible_moves[(x, y)] = calculate_rook(x, y, player, enemy, True, [])
-                    elif piece == KNIGHT:
-                        possible_moves[(x, y)] = calculate_knight(x, y, player, enemy, True, [])
-                    elif piece == BISHOP:
-                        possible_moves[(x, y)] = calculate_bishop(x, y, player, enemy, True, [])
-                    elif piece == QUEEN:
-                        possible_moves[(x, y)] = calculate_queen(x, y, player, enemy, True, [])
-                    elif piece == KING:
-                        possible_moves[(x, y)] = calculate_king(x, y, player, enemy, True, [])
-    return possible_moves
+def calculate_knight(location: int):
+    return _knight_movements[location]
 
 
-
-def calculate_pieces_list(player, enemy):
-    targets = {}
-    pieces = player.pieces()
-    for x in range(BOARD_SIZE):
-        for y in range(BOARD_SIZE):
-            for piece in pieces.keys():
-                if has_square(pieces[piece], x, y):
-                    targets[(x, y)] = []
-                    if piece == PAWN:
-                        calculate_pawn(x, y, player, enemy, True, targets[(x, y)])
-                    elif piece == ROOK:
-                        calculate_rook(x, y, player, enemy, True, targets[(x, y)])
-                    elif piece == KNIGHT:
-                        calculate_knight(x, y, player, enemy, True, targets[(x, y)])
-                    elif piece == BISHOP:
-                        calculate_bishop(x, y, player, enemy, True, targets[(x, y)])
-                    elif piece == QUEEN:
-                        calculate_queen(x, y, player, enemy, True, targets[(x, y)])
-                    elif piece == KING:
-                        calculate_king(x, y, player, enemy, True, targets[(x, y)])
-    return targets
+def _calculate_slider_attacks(slider: int, occupied: int):
+    left_accessible = occupied - 2 * slider # Fills all bits to the left up untill and including the first occupied bit which isn't the piece itself. Bits to the right are equal to the occupied mask.
+    accessible = occupied ^ left_accessible # Bits to the right are zeroed due to XOR, bits to the left only leave bits to the right of second occupied 1 from slider.
+    return accessible
 
 
-def handle_en_passent_targets(player, selected, toX, toY):
-    player.en_passent_targets = []
-    if abs(selected[1] - toY) == 2: # check if move was en-passent
-        player.en_passent_targets.append((toX, toY + player.forward()))
+def calculate_rook_horiz(location: int, occupied: int):
+    slider = flag(location)
+
+    row = _rook_movements_horiz[location]
+    
+    r_slider = reverse(slider)
+    r_occupied = reverse(occupied)
+
+    right_attacks = _calculate_slider_attacks(slider, occupied & row) & row
+    left_attacks = reverse(_calculate_slider_attacks(r_slider, r_occupied & row) & row)
+
+    return right_attacks | left_attacks
+
+
+def calculate_rook_vert(location: int, occupied: int):
+    slider = flag(location)
+
+    col = _rook_movements_vert[location]
+    
+    f_slider = flip(slider)
+    f_occupied = flip(occupied)
+
+    down_attacks = _calculate_slider_attacks(slider, occupied & col) & col
+    up_attacks = flip(_calculate_slider_attacks(f_slider, f_occupied & col) & col)
+
+    return down_attacks | up_attacks
+
+
+def calculate_rook(location: int, occupied: int):
+    horiz = calculate_rook_horiz(location, occupied)
+    vert = calculate_rook_vert(location, occupied)
+
+    return horiz | vert
+
+
+def calculate_bishop_trbl(location: int, occupied: int):
+    slider = flag(location)
+
+    s = rotate45Cw(slider)
+    o = rotate45Cw(occupied)
+
+    loc = location_from_flag(s)
+    row = _rook_movements_horiz[loc]
+
+    tr = _calculate_slider_attacks(s, o & row) & row
+    tr = rotateRight(rotate45Ccw(tr), 8) & _bishop_movements_bltr[location]
+
+    r_s = reverse(s)
+    r_o = reverse(o)
+
+    bl = reverse(_calculate_slider_attacks(r_s, r_o & row) & row)
+    bl = rotateRight(rotate45Ccw(bl), 8) & _bishop_movements_bltr[location]
+
+    return tr | bl
+
+
+def calculate_bishop_tlbr(location: int, occupied: int):
+    slider = flag(location)
+
+    s = rotate45Ccw(slider)
+    o = rotate45Ccw(occupied)
+
+    loc = location_from_flag(s)
+    row = _rook_movements_horiz[loc]
+
+    br = _calculate_slider_attacks(s, o & row) & row
+    br = rotateRight(rotate45Cw(br), 8) & _bishop_movements_tlbr[location]
+
+    r_s = reverse(s)
+    r_o = reverse(o)
+
+    tl = reverse(_calculate_slider_attacks(r_s, r_o & row) & row)
+    tl = rotateRight(rotate45Cw(tl), 8) & _bishop_movements_tlbr[location]
+
+    return br | tl
+
+def calculate_bishop(location: int, occupied: int):
+    trbl = calculate_bishop_trbl(location, occupied)
+    tlbr = calculate_bishop_tlbr(location, occupied)
+
+    return trbl | tlbr
+
+
+def calculate_queen(location: int, occupied: int):
+    return calculate_bishop(location, occupied) | calculate_rook(location, occupied)
+
+
+def calculate_king(location: int):
+    return _king_movements[location]
+
+
+def pawn_movements(location: int, attacks: int, side: int, white_squares: int, black_squares: int, en_passent_targets: int):
+    white_starting_range = range(48, 56) # Second row from bottom
+    black_starting_range = range(8, 16) # Second row from top
+
+    forward = -side
+
+    enemy_squares = black_squares if side == WHITE else white_squares
+    occupied = white_squares |  black_squares
+
+    attacks = attacks & (enemy_squares | en_passent_targets)
+
+    simple_moves = flag(location + 8 * forward) & ~occupied
+    if simple_moves:
+        if ((side == WHITE) and (location in white_starting_range)) or ((side == BLACK) and (location in black_starting_range)):
+            simple_moves |= flag(location + 2 * 8 * forward) & ~occupied
+
+    return attacks | simple_moves

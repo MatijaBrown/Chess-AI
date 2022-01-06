@@ -1,159 +1,159 @@
-import math as maths
-
 import string
+import math as maths
 
 
 BOARD_SIZE = 8
 
-SIDE_NONE = 0
-SIDE_WHITE = 1
-SIDE_BLACK = -1
+NO_SIDE = 0
+WHITE = 1
+BLACK = -WHITE
+
+NULL_PIECE = 0
+PAWN = 1
+ROOK = 2
+KNIGHT = 3
+BISHOP = 4
+QUEEN = 5
+KING = 6
+
+PIECES = [PAWN, ROOK, KNIGHT, BISHOP, QUEEN, KING]
+
+PIECE_NAMES = {
+    WHITE * PAWN: "white_pawn",
+    WHITE * ROOK: "white_rook",
+    WHITE * KNIGHT: "white_knight",
+    WHITE * BISHOP: "white_bishop",
+    WHITE * QUEEN: "white_queen",
+    WHITE * KING: "white_king",
+    
+    BLACK * PAWN: "black_pawn",
+    BLACK * ROOK: "black_rook",
+    BLACK * KNIGHT: "black_knight",
+    BLACK * BISHOP: "black_bishop",
+    BLACK * QUEEN: "black_queen",
+    BLACK * KING: "black_king"
+}
+
+DEFAULT_STARTING_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+
+VALUE_PAWN = 1
+VALUE_KNIGHT = 3
+VALUE_BISHOP = 3
+VALUE_ROOK = 5
+VALUE_QUEEN = 9
+VALUE_KING = 1_000_000
 
 
-EMPTY = 0
-PAWN = 1 << 0
-ROOK = 1 << 1
-KNIGHT = 1 << 2
-BISHOP = 1 << 3
-QUEEN = 1 << 4
-KING = 1 << 5
+PIECE_VALUES = {
+    PAWN: VALUE_PAWN,
+    KNIGHT: VALUE_KNIGHT,
+    BISHOP: VALUE_BISHOP,
+    ROOK: VALUE_ROOK,
+    QUEEN: VALUE_QUEEN,
+    KING: VALUE_KING
+}
 
 
-STARTING_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+def side_of(piece: int) -> int:
+    if piece > 0:
+        return WHITE
+    elif piece < 0:
+        return BLACK
+    else:
+        return 0
 
 
-NULL_SQUARE = (-1, -1)
-
-
-def offset_of(x, y):
+def offset_of(x: int, y: int) -> int:
     return y * BOARD_SIZE + x
 
 
-def flag_piece(x, y):
-    return 1 << offset_of(x, y)
+def flag(offset: int) -> int:
+    return 1 << offset
 
 
-def has_square(mask, x, y):
-    return (mask & flag_piece(x, y)) != 0
-
-
-def side_of(piece):
-    piece /= abs(piece) # if the piece is 1 (white), else it is -1 (black)
-    return piece
-
-
-def is_on_side(piece, side):
-    return side_of(piece) == side
-
-
-def square_name_to_tuple(square_name):
+def flag_from_square_name(square_name: str) -> int:
     sX = square_name[0]
     sY = square_name[1]
     x = string.ascii_lowercase.index(sX)
     y = int(sY)
-    return (x, y)
+    return 1 << offset_of(x, y)
 
 
-def tuple_to_square_name(tuple):
-    tX = tuple[0]
-    tY = tuple[1]
-    x = chr(97 + tX)
-    return x + str(tY)
+def check_coords(x: int, y: int):
+    return ((x >= 0) and (x < BOARD_SIZE)) and ((y >= 0) and (y < BOARD_SIZE))
 
 
-def is_on_board(boardX, boardY):
-    return (boardX >= 0) and (boardY >= 0) and (boardX < BOARD_SIZE) and (boardY < BOARD_SIZE)
+def is_on_board(offset: int):
+    return (offset >= 0) and (offset < 64)
 
 
-def mask_to_coords(mask):
-    n = int(maths.log2(mask))
-    x = n % BOARD_SIZE
-    y = int((n - x) / BOARD_SIZE)
-    return x, y
+def location_from_flag(flag: int):
+    return int(maths.log2(flag))
 
 
-def value_of_piece(piece, x, y):
-    p = abs(piece)
-    if p == PAWN:
-        value_map = VALUES_PAWN_W
-    elif p == BISHOP:
-        value_map = VALUES_BISHOP_W
-    elif p == KNIGHT:
-        value_map = VALUES_KNIGHT_W
-    elif p == ROOK:
-        value_map = VALUES_ROOK_W
-    elif p == QUEEN:
-        value_map = VALUES_QUEEN_W
-    elif p == KING:
-        return VALUE_KING_W * side_of(piece)
-    else:
-        return 0
-    
-    if side_of(piece) == SIDE_BLACK:
-        value_map.reverse()
-
-    return value_map[y][x]
+def flip(x: int):
+    k1 = 0x00FF00FF00FF00FF
+    k2 = 0x0000FFFF0000FFFF
+    x = ((x >>  8) & k1) | ((x & k1) <<  8)
+    x = ((x >> 16) & k2) | ((x & k2) << 16)
+    x = (x >> 32)        | ( x       << 32)
+    return x
 
 
-# ALL VALUES FOR WHITE, REVERSE FOR BLACK (Taken from Sunfish)
-VALUES_PAWN_W = [
-    [   0,   0,   0,   0,   5,   0,   0,   0],
-    [  78,  83,  86,  73, 102,  82,  85,  90],
-    [   7,  29,  21,  44,  40,  31,  44,   7],
-    [ -17,  16,  -2,  15,  14,   0,  15, -13],
-    [ -26,   3,  10,   9,   6,   1,   0, -23],
-    [ -22,   9,   5, -11, -10,  -2,   3, -19],
-    [ -31,   8,  -7, -37, -36, -14,   3, -31],
-    [   0,   0,   0,   0,   0,   0,   0,   0]
-]
+def reverse(x: int):
+    k1 = 0x5555555555555555
+    k2 = 0x3333333333333333
+    k4 = 0x0f0f0f0f0f0f0f0f
+    x = ((x >> 1) & k1) +  2 * (x & k1)
+    x = ((x >> 2) & k2) +  4 * (x & k2)
+    x = ((x >> 4) & k4) + 16 * (x & k4)
+    return x
 
 
-VALUES_ROOK_W = [
-    [ 35,  29,  33,   4,  37,  33,  56,  50],
-    [ 55,  29,  56,  67,  55,  62,  34,  60],
-    [ 19,  35,  28,  33,  45,  27,  25,  15],
-    [  0,   5,  16,  13,  18,  -4,  -9,  -6],
-    [-28, -35, -16, -21, -13, -29, -46, -30],
-    [-42, -28, -42, -25, -25, -35, -26, -46],
-    [-53, -38, -31, -26, -29, -43, -44, -53],
-    [-30, -24, -18,   5,  -2, -18, -31, -32]
-]
+def rotate180(x: int):
+    return reverse(flip(x))
 
 
-VALUES_KNIGHT_W = [
-    [-66, -53, -75, -75, -10, -55, -58, -70],
-    [ -3,  -6, 100, -36,   4,  62,  -4, -14],
-    [ 10,  67,   1,  74,  73,  27,  62,  -2],
-    [ 24,  24,  45,  37,  33,  41,  25,  17],
-    [ -1,   5,  31,  21,  22,  35,   2,   0],
-    [-18,  10,  13,  22,  18,  15,  11, -14],
-    [-23, -15,   2,   0,   2,   0, -23, -20],
-    [-74, -23, -26, -24, -19, -35, -22, -69]
-]
+def rotate90Cw(x: int):
+    return flip(flipDiagA1H8(x))
 
 
-VALUES_BISHOP_W = [
-    [-59, -78, -82, -76, -23,-107, -37, -50],
-    [-11,  20,  35, -42, -39,  31,   2, -22],
-    [ -9,  39, -32,  41,  52, -10,  28, -14],
-    [ 25,  17,  20,  34,  26,  25,  15,  10],
-    [ 13,  10,  17,  23,  17,  16,   0,   7],
-    [ 14,  25,  24,  15,   8,  25,  20,  15],
-    [ 19,  20,  11,   6,   7,   6,  20,  16],
-    [ -7,   2, -15, -12, -14, -15, -10, -10]
-]
+def rotate90Ccw(x: int):
+    return flipDiagA1H8(flip(x))
 
 
-VALUES_QUEEN_W = [
-    [  6,   1,  -8,-104,  69,  24,  88,  26],
-    [ 14,  32,  60, -10,  20,  76,  57,  24],
-    [ -2,  43,  32,  60,  72,  63,  43,   2],
-    [  1, -16,  22,  17,  25,  20, -13,  -6],
-    [-14, -15,  -2,  -5,  -1, -10, -20, -22],
-    [-30,  -6, -13, -11, -16, -11, -16, -27],
-    [-36, -18,   0, -19, -15, -15, -21, -38],
-    [-39, -30, -31, -13, -31, -36, -34, -42]
-]
+def flipDiagA1H8(x: int):
+    k1 = 0x5500550055005500
+    k2 = 0x3333000033330000
+    k4 = 0x0f0f0f0f00000000
+    t = k4 & (x ^ (x << 28))
+    x ^=      t ^ (t >> 28)
+    t = k2 & (x ^ (x << 14))
+    x ^=      t ^ (t >> 14)
+    t = k1 & (x ^ (x << 7))
+    x ^=      t ^ (t >> 7)
+    return x
 
 
-VALUE_KING_W = 10000000
+def rotateRight(x: int, s: int):
+    return (x >> s) | (x << (64 - s))
+
+
+def rotate45Ccw(x: int):
+    k1 = 0xAAAAAAAAAAAAAAAA
+    k2 = 0xCCCCCCCCCCCCCCCC
+    k4 = 0xF0F0F0F0F0F0F0F0
+    x ^= k1 & (x ^ rotateRight(x,  8))
+    x ^= k2 & (x ^ rotateRight(x, 16))
+    x ^= k4 & (x ^ rotateRight(x, 32))
+    return x
+
+
+def rotate45Cw(x: int):
+    k1 = 0x5555555555555555
+    k2 = 0x3333333333333333
+    k4 = 0x0f0f0f0f0f0f0f0f
+    x ^= k1 & (x ^ rotateRight(x,  8))
+    x ^= k2 & (x ^ rotateRight(x, 16))
+    x ^= k4 & (x ^ rotateRight(x, 32))
+    return x

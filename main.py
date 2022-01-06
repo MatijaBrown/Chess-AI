@@ -1,15 +1,13 @@
-from chess import Chess
-
 import tkinter as tk
+import application as app
+
 
 def run():
     top = tk.Tk()
     top.title("Chess")
-
-    chess = Chess(top)
-    chess.pack(side=tk.TOP, fill=tk.BOTH, expand=tk.TRUE, padx=4, pady=4)
-
+    chess = app.ChessGame(top)
     top.mainloop()
+
 
 if __name__ == "__main__":
     run()
